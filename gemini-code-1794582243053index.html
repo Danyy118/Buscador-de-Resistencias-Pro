@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buscador de Resistencias Pro</title>
+<style>
+:root {
+    --bg: #f0f2f5; --card: #ffffff; --text: #1a1a2e; --text2: #666;
+    --border: #e0e0e0; --input-bg: #ffffff; --accent: #4a6cf7;
+    --accent2: #3b5de7; --panel: #f8faff; --alt: #fafafa;
+    --success: #137333; --error: #c5221f; --warning: #b06000;
+    --shadow: rgba(0,0,0,0.08);
+}
+[data-theme="dark"] {
+    --bg: #0f0f14; --card: #1a1a24; --text: #e8e8f0; --text2: #999;
+    --border: #333340; --input-bg: #252530; --accent: #7c94ff;
+    --accent2: #6a82f0; --panel: #252540; --alt: #222230;
+    --success: #4ade80; --error: #f87171; --warning: #fbbf24;
+    --shadow: rgba(0,0,0,0.4);
+}
+* { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
+body { background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; transition: background 0.2s, color 0.2s; }
+.container { max-width: 940px; width: 100%; background: var(--card); border-radius: 16px; box-shadow: 0 4px 20px var(--shadow); padding: 24px 28px; }
+.top-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 12px; }
+h1 { font-size: 1.5rem; margin: 0 0 4px; }
+.subtitle { color: var(--text2); font-size: 0.88rem; margin: 0; }
+.theme-btn { background: var(--input-bg); border: 2px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+.theme-btn:hover { border-color: var(--accent); }
+.form-group { margin-bottom: 16px; }
+label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+input[type="number"], select { width: 100%; padding: 10px 12px; font-size: 1rem; border: 2px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--text); font-family: inherit; }
+input:focus, select:focus { border-color: var(--accent); outline: none; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.row .form-group { flex: 1; min-width: 130px; }
+button.primary { background: var(--accent); color: white; border: none; padding: 12px 28px; font-size: 1rem; font-weight: 600; border-radius: 10px; cursor: pointer; width: 100%; }
+button.primary:hover:not(:disabled) { background: var(--accent2); }
+button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+#status { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
+#status.loading { display: block; background: rgba(74,108,247,0.12); color: var(--accent); }
+#status.error { display: block; background: rgba(197,34,31,0.15); color: var(--error); }
+#status.success { display: block; background: rgba(19,115,51,0.15); color: var(--success); }
+.progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s; }
+.result-section { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px; display: none; }
+.result-section.visible { display: block; }
+
+.commercial-notice { display: none; background: rgba(19,115,51,0.10); border: 2px solid var(--success); border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; gap: 12px; align-items: flex-start; }
+[data-theme="dark"] .commercial-notice { background: rgba(74,222,128,0.10); }
+.commercial-notice.visible { display: flex; }
+.commercial-notice .icon { font-size: 1.5rem; flex-shrink: 0; line-height: 1; }
+.commercial-notice .text { font-size: 0.95rem; line-height: 1.55; }
+.commercial-notice .text strong { color: var(--success); }
+
+.best-config { background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+.best-config h2 { margin: 0 0 10px; font-size: 1.1rem; color: var(--accent); }
+.formula-block { background: var(--card); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; font-family: 'Courier New', monospace; font-size: 0.95rem; line-height: 1.6; }
+.formula-block .symbolic { color: var(--text2); font-size: 0.85rem; margin-bottom: 4px; }
+.formula-block .numeric { color: var(--text); }
+.formula-block .result { color: var(--accent); font-weight: 700; font-size: 1.05rem; margin-top: 4px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+.metric { background: var(--card); border-radius: 8px; padding: 12px; text-align: center; }
+.metric .label { font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric .value { font-size: 1.25rem; font-weight: 700; margin-top: 4px; }
+.diagram-container { background: var(--alt); border: 1px solid var(--border); border-radius: 12px; padding: 16px 10px; display: flex; justify-content: center; overflow-x: auto; }
+svg { max-width: 100%; height: auto; }
+.color-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.legend-row { background: var(--alt); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; flex: 1; min-width: 200px; }
+.legend-row .legend-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; margin-bottom: 6px; }
+.legend-row .legend-name { font-weight: 700; color: var(--accent); }
+.legend-row .legend-val { font-weight: 600; }
+.legend-bands { display: flex; gap: 4px; margin: 6px 0; }
+.band-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); }
+.legend-caption { font-size: 0.75rem; color: var(--text2); }
+
+.alternative-list { margin-top: 16px; }
+.alternative-list h3 {
+    font-size: 1rem;
+    color: var(--accent);
+    background: var(--panel);
+    border-left: 4px solid var(--accent);
+    padding: 9px 14px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+[data-theme="dark"] .alternative-list h3 { background: rgba(124,148,255,0.12); }
+.alt-hint { font-size: 0.78rem; color: var(--text2); margin-bottom: 10px; font-style: italic; }
+
+.alt-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.88rem;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px var(--shadow);
+}
+.alt-item:hover {
+    transform: translateX(3px);
+    box-shadow: 0 3px 10px var(--shadow);
+    border-left-color: var(--accent2);
+    background: var(--card);
+}
+.alt-item.active {
+    background: rgba(74,108,247,0.10);
+    border-left-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(74,108,247,0.25);
+    font-weight: 600;
+}
+[data-theme="dark"] .alt-item.active {
+    background: rgba(124,148,255,0.15);
+}
+.alt-item .rank-pill { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.alt-item .rank {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 24px; height: 24px; padding: 0 6px; background: var(--accent);
+    color: white; border-radius: 6px; font-size: 0.72rem; font-weight: 700;
+}
+.alt-item.active .rank { background: var(--accent2); }
+.alt-item .count-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 2px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: 700;
+    background: rgba(0,0,0,0.06); color: var(--text2);
+}
+[data-theme="dark"] .alt-item .count-badge { background: rgba(255,255,255,0.10); color: var(--text); }
+.alt-item .eq { font-family: 'Courier New', monospace; flex: 1; word-break: break-word; color: var(--text); font-size: 0.86rem; }
+.alt-item .val { font-weight: 600; color: var(--accent); white-space: nowrap; font-size: 0.85rem; }
+.note { font-size: 0.8rem; color: var(--text2); margin-top: 12px; text-align: center; }
+.section-title { font-size: 0.9rem; font-weight: 700; color: var(--accent); margin: 20px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.checkbox-row input[type="checkbox"] { width: auto; cursor: pointer; transform: scale(1.15); }
+.checkbox-row label { margin: 0; cursor: pointer; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="top-bar">
+        <div>
+            <h1>🔧 Buscador de Resistencias Pro</h1>
+            <p class="subtitle">Óptimo 1 a máx. 3 resistencias · Series comerciales E12 / E24 · Código de colores</p>
+        </div>
+        <button class="theme-btn" id="themeBtn">🌙 Oscuro</button>
+    </div>
+
+    <div class="section-title">Parámetros</div>
+    <div class="row">
+        <div class="form-group" style="flex:2">
+            <label for="targetInput">Valor deseado</label>
+            <input type="number" id="targetInput" value="6.3" min="0.001" step="any">
+        </div>
+        <div class="form-group" style="flex:1">
+            <label for="unitSelect">Prefijo SI</label>
+            <select id="unitSelect">
+                <option value="0.001">mΩ</option>
+                <option value="1">Ω</option>
+                <option value="1e3">kΩ</option>
+                <option value="1e6" selected>MΩ</option>
+            </select>
+        </div>
+        <div class="form-group" style="flex:1">
+            <label for="toleranceSelect">Tolerancia / Serie</label>
+            <select id="toleranceSelect">
+                <option value="10">10%</option>
+                <option value="1" selected>1%</option>
+            </select>
+        </div>
+        <div class="form-group" style="flex:1">
+            <label for="maxResistors">Máx. resistencias</label>
+            <select id="maxResistors">
+                <option value="1">1 resistencia</option>
+                <option value="2">Máximo 2 resistencias</option>
+                <option value="3" selected>Máximo 3 resistencias</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="checkbox-row">
+        <input type="checkbox" id="includeNonCommercial">
+        <label for="includeNonCommercial">Incluir valores no comerciales (grid fino 100/década)</label>
+    </div>
+
+    <button class="primary" id="searchBtn">🔍 Buscar combinación óptima</button>
+    <div id="status"></div>
+    <div class="progress-bar" style="display:none;" id="progressWrap"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div id="resultSection" class="result-section">
+        <div id="commercialNotice" class="commercial-notice"></div>
+
+        <div class="best-config">
+            <h2 id="bestTitle">✅ Mejor combinación</h2>
+            <div class="formula-block" id="formulaBlock"></div>
+            <div class="metric-grid">
+                <div class="metric"><div class="label">Valor teórico</div><div class="value" id="bestTarget">—</div></div>
+                <div class="metric"><div class="label">Equivalente</div><div class="value" id="bestR">—</div></div>
+                <div class="metric"><div class="label">Error</div><div class="value" id="bestError">—</div></div>
+                <div class="metric"><div class="label">Tolerancia</div><div class="value" id="bestTol">—</div></div>
+                <div class="metric"><div class="label">Conexión</div><div class="value" id="bestConn">—</div></div>
+                <div class="metric"><div class="label">Disponibilidad</div><div class="value" id="bestSeries">—</div></div>
+                <div class="metric"><div class="label">Potencia (1V)</div><div class="value" id="bestPower">—</div></div>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom:12px;">Diagrama con código de colores</h3>
+        <div class="diagram-container" id="diagramContainer"></div>
+        <div class="color-legend" id="colorLegend"></div>
+
+        <div class="alternative-list">
+            <h3>5 Mejores alternativas — haz clic para ver detalle</h3>
+            <p class="alt-hint">Cada alternativa actualiza el panel con su fórmula, diagrama esquemático y bandas de color.</p>
+            <div id="altItems"></div>
+        </div>
+        <p class="note">Potencia calculada asumiendo 1 V entre terminales. P ∝ V² para voltajes de trabajo diferentes.</p>
+    </div>
+</div>
+
+<script>
+/* ================= TEMA ================= */
+const themeBtn = document.getElementById('themeBtn');
+function setTheme(dark) {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    themeBtn.textContent = dark ? '☀️ Claro' : '🌙 Oscuro';
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+}
+themeBtn.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
+if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && matchMedia('(prefers-color-scheme: dark)').matches)) setTheme(true);
+
+/* ================= SERIES COMERCIALES Y DISPONIBILIDAD CONFIGURABLE ================= */
+const E12 = [1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2];
+
+const E24 = [
+    1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0,
+    3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1
+];
+
+/* CONFIGURACIÓN DE PUNTUACIÓN DE DISPONIBILIDAD EN TIENDAS (Menor puntuación = Mayor disponibilidad)
+   - Puntuación 1: Valores E12 de altísima rotación y fácil adquisición (1.0, 2.2, 3.3, 4.7, 5.6 y sus múltiplos habituales)
+   - Puntuación 2: Resto de valores estándar de la serie E12 (1.2, 1.5, 1.8, 2.7, 3.9, 6.8, 8.2)
+   - Puntuación 3: Valores adicionales de la serie E24 (se usan solo si E12 no resuelve dentro de tolerancia)
+   - Puntuación 4: Valores no estándar (grid fino)
+*/
+const PREFERRED_SCORES = {
+    // Multiplicadores base E12 preferentes (Puntuación 1)
+    baseTopE12: [1.0, 2.2, 3.3, 4.7, 5.6],
+    // Valores específicos en Ohmios que siempre tienen máxima prioridad en mostrador (Puntuación 1)
+    exactPreferredValues: [
+        1, 10, 22, 33, 47, 56,
+        100, 220, 330, 470, 560,
+        1e3, 2.2e3, 3.3e3, 4.7e3, 5.6e3,
+        10e3, 22e3, 33e3, 47e3, 56e3,
+        100e3, 220e3, 330e3, 470e3, 560e3,
+        1e6, 2.2e6, 3.3e6, 4.7e6, 5.6e6, 10e6
+    ],
+    // Valores específicos E12 menos habituales en valores altos (Puntuación 2)
+    secondaryValues: [680e3, 6.8e6, 820e3, 8.2e6]
+};
+
+function getAvailabilityScore(value) {
+    const v = parseFloat(value.toPrecision(7));
+    if (PREFERRED_SCORES.secondaryValues.some(x => Math.abs(x - v) / v < 1e-5)) return 2;
+    if (PREFERRED_SCORES.exactPreferredValues.some(x => Math.abs(x - v) / v < 1e-5)) return 1;
+
+    const exp = Math.floor(Math.log10(v) + 1e-9);
+    const m = Math.round(v / Math.pow(10, exp) * 100) / 100;
+
+    if (PREFERRED_SCORES.baseTopE12.includes(m)) return 1;
+    if (E12.includes(m)) return 2;
+    if (E24.includes(m)) return 3;
+    return 4;
+}
+
+function generateValues(base, dMin, dMax) {
+    const out = [];
+    for (let e = dMin; e <= dMax; e++) {
+        const f = Math.pow(10, e);
+        for (const v of base) {
+            out.push(parseFloat((v * f).toPrecision(7)));
+        }
+    }
+    return out;
+}
+
+function generateFineGrid(perDecade, dMin, dMax) {
+    const out = [];
+    for (let e = dMin; e <= dMax; e++) {
+        const f = Math.pow(10, e);
+        for (let i = 0; i < perDecade; i++) {
+            out.push(parseFloat((Math.pow(10, i / perDecade) * f).toPrecision(7)));
+        }
+    }
+    return out;
+}
+
+const TIER_NAMES = {
+    1: 'E12 (Alta disp.)',
+    2: 'E12 (Estándar)',
+    3: 'E24',
+    4: 'No estándar'
+};
+const CONNECTION_NAMES = {
+    single: 'Resistencia única', series2: 'Serie', series3: 'Serie', parallel2: 'Paralelo', parallel3: 'Paralelo',
+    series2_parallel1: 'Mixta (serie + paralelo)', parallel2_series1: 'Mixta (paralelo + serie)'
+};
+const COMMON_MAX = 1e7;
+const adequateThreshold = tol => tol;
+
+const TIER_CACHE = {};
+function getTierData(tol, nonCommercial) {
+    const key = `${tol}_${nonCommercial ? 'nc' : 'c'}`;
+    if (TIER_CACHE[key]) return TIER_CACHE[key];
+
+    const tierOf = new Map();
+    const put = (arr) => {
+        for (const v of arr) {
+            if (!tierOf.has(v)) tierOf.set(v, getAvailabilityScore(v));
+        }
+    };
+    const common = base => generateValues(base, 0, 7).filter(x => x <= COMMON_MAX);
+
+    put(common(E12));
+    put(common(E24));
+    if (nonCommercial) put(generateFineGrid(100, -1, 7));
+
+    const values = Array.from(tierOf.keys()).sort((a, b) => a - b);
+    return (TIER_CACHE[key] = { tierOf, values });
+}
+
+function classifyValue(v) {
+    const exp = Math.floor(Math.log10(v) + 1e-9);
+    const m = Math.round(v / Math.pow(10, exp) * 100) / 100;
+    if (E12.includes(m)) return 'E12';
+    if (E24.includes(m)) return 'E24';
+    return 'No estándar';
+}
+
+function seriesLabel(resistors, tierOf) {
+    const worstTier = Math.max(...resistors.map(r => tierOf.get(r) || 4));
+    return TIER_NAMES[worstTier];
+}
+
+function findCommercialMatch(value, tol) {
+    const { tierOf, values: pool } = getTierData(tol, false);
+    let lo = 0, hi = pool.length - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (Math.abs(pool[mid] - value) / value < 1e-4) {
+            return { value: pool[mid], error: 0, exact: true, tier: tierOf.get(pool[mid]) };
+        }
+        if (pool[mid] < value) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    let best = null, bestErr = Infinity;
+    for (let idx = Math.max(0, lo - 2); idx <= Math.min(pool.length - 1, lo + 2); idx++) {
+        const err = Math.abs(pool[idx] - value) / value;
+        if (err < bestErr) { bestErr = err; best = pool[idx]; }
+    }
+    if (best === null) return null;
+    if (bestErr < 1e-4) return { value: best, error: 0, exact: true, tier: tierOf.get(best) };
+    if (bestErr <= tol / 100) return { value: best, error: bestErr, exact: false, tier: tierOf.get(best) };
+    return null;
+}
+
+/* ================= FORMATO ================= */
+const trimZero = s => s.replace(/\.?0+$/, '');
+function formatOhms(v) {
+    if (!isFinite(v) || v <= 0) return '?';
+    if (v >= 1e6) return trimZero((v / 1e6).toFixed(2)) + ' MΩ';
+    if (v >= 1e3) return trimZero((v / 1e3).toFixed(2)) + ' kΩ';
+    if (v >= 1)   return trimZero(v.toFixed(2)) + ' Ω';
+    return trimZero(v.toFixed(3)) + ' Ω';
+}
+function formatPower(w) {
+    if (w >= 1) return w.toFixed(3) + ' W';
+    if (w >= 1e-3) return (w * 1e3).toFixed(2) + ' mW';
+    if (w >= 1e-6) return (w * 1e6).toFixed(2) + ' µW';
+    return (w * 1e9).toFixed(2) + ' nW';
+}
+
+/* ================= CÓDIGO DE COLORES ================= */
+const COLOR_NAMES = ['Negro','Marrón','Rojo','Naranja','Amarillo','Verde','Azul','Violeta','Gris','Blanco'];
+const COLOR_HEX = ['#1a1a1a','#8B4513','#e53935','#fb8c00','#fdd835','#43a047','#1e88e5','#8e24aa','#757575','#fafafa'];
+
+function getResistorColors(value, tolerance) {
+    if (!isFinite(value) || value <= 0) {
+        return [{hex:'#888',name:'?'},{hex:'#888',name:'?'},{hex:'#888',name:'?'},{hex:'#888',name:'?'}];
+    }
+    const exp = Math.floor(Math.log10(value));
+    const p2 = Math.round(value / Math.pow(10, exp - 1));
+    const err2 = Math.abs(p2 * Math.pow(10, exp - 1) - value) / value;
+    let digits, expM;
+    if (tolerance !== 1 && err2 < 1e-9 && p2 >= 10 && p2 <= 99) {
+        digits = [Math.floor(p2 / 10), p2 % 10];
+        expM = exp - 1;
+    } else {
+        const p3 = Math.round(value / Math.pow(10, exp - 2));
+        if (p3 >= 1000) {
+            digits = [Math.floor(p3 / 1000), Math.floor(p3 / 100) % 10, Math.floor(p3 / 10) % 10];
+            expM = exp - 1;
+        } else if (p3 < 100) {
+            const p4 = Math.round(value / Math.pow(10, exp - 3));
+            digits = [Math.floor(p4 / 100) % 10, Math.floor(p4 / 10) % 10, p4 % 10];
+            expM = exp - 3;
+        } else {
+            digits = [Math.floor(p3 / 100), Math.floor(p3 / 10) % 10, p3 % 10];
+            expM = exp - 2;
+        }
+    }
+    const bands = digits.map(d => ({ hex: COLOR_HEX[d], name: COLOR_NAMES[d], val: d }));
+    let mult;
+    if (expM >= 0 && expM <= 9) mult = { hex: COLOR_HEX[expM], name: COLOR_NAMES[expM], mult: expM };
+    else if (expM === -1) mult = { hex: '#c9a227', name: 'Dorado', mult: -1 };
+    else if (expM === -2) mult = { hex: '#b0b0b0', name: 'Plateado', mult: -2 };
+    else mult = { hex: '#888', name: '?', mult: expM };
+    bands.push(mult);
+
+    const tolInfo = {
+        '1': { hex: '#8B4513', name: 'Marrón' },
+        '2': { hex: '#e53935', name: 'Rojo' },
+        '5': { hex: '#c9a227', name: 'Dorado' },
+        '10': { hex: '#b0b0b0', name: 'Plateado' }
+    }[String(tolerance)] || { hex: '#c9a227', name: 'Dorado' };
+    bands.push({ hex: tolInfo.hex, name: tolInfo.name, tolerance });
+    return bands;
+}
+
+/* ================= ALGORITMO DE BÚSQUEDA Y SELECCIÓN COMERCIAL ================= */
+function searchCombinations(target, tol, maxResistors, nonCommercial) {
+    return new Promise(resolve => {
+        const { tierOf, values: allValues } = getTierData(tol, nonCommercial);
+        const threshold = adequateThreshold(tol);
+        const minV = Math.max(0.1, target / 200);
+        const maxV = Math.min(1e8, target * 200);
+        const MAX_KEEP_ERROR = 50;
+
+        const candidates = [];
+        const seen = new Set();
+        let poolSize = 0;
+
+        const addCandidate = (rEq, resistors, type) => {
+            if (!isFinite(rEq) || rEq <= 0) return;
+            const sortedR = [...resistors].sort((a, b) => a - b);
+            const key = type + ':' + sortedR.map(x => x.toPrecision(7)).join(',');
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            const error = Math.abs(rEq - target) / target * 100;
+            if (error > MAX_KEEP_ERROR && type !== 'single') return;
+
+            const count = sortedR.length;
+            const balance = sortedR[sortedR.length - 1] / sortedR[0];
+            // Puntuación de disponibilidad de la combinación = el componente menos disponible (peor caso)
+            const availabilityRank = Math.max(...sortedR.map(r => tierOf.get(r) || 4));
+            // Suma de puntuaciones para desempatar dentro del mismo rango de disponibilidad
+            const availabilitySum = sortedR.reduce((acc, r) => acc + (tierOf.get(r) || 4), 0);
+
+            candidates.push({
+                rEq,
+                resistors: sortedR,
+                type,
+                error,
+                count,
+                balance,
+                tier: availabilityRank,
+                availabilitySum,
+                adequate: error <= threshold,
+                series: seriesLabel(sortedR, tierOf)
+            });
+        };
+
+        const evaluatePool = (pool) => {
+            const n = pool.length;
+            if (n === 0) return;
+            poolSize = Math.max(poolSize, n);
+
+            // 1. 1 Resistencia
+            for (let i = 0; i < n; i++) {
+                addCandidate(pool[i], [pool[i]], 'single');
+            }
+
+            // 2. 2 Resistencias (Serie y Paralelo)
+            if (maxResistors >= 2) {
+                for (let i = 0; i < n; i++) {
+                    const r1 = pool[i];
+                    for (let j = i; j < n; j++) {
+                        const r2 = pool[j];
+                        addCandidate(r1 + r2, [r1, r2], 'series2');
+                        addCandidate((r1 * r2) / (r1 + r2), [r1, r2], 'parallel2');
+                    }
+                }
+            }
+
+            // 3. 3 Resistencias (Serie, Paralelo y Mixtas)
+            if (maxResistors >= 3) {
+                for (let i = 0; i < n; i++) {
+                    const vi = pool[i];
+                    for (let j = i; j < n; j++) {
+                        const vj = pool[j];
+                        const s12 = vi + vj;
+                        const p12 = (vi * vj) / (vi + vj);
+                        const inv12 = 1 / vi + 1 / vj;
+
+                        for (let k = j; k < n; k++) {
+                            const vk = pool[k];
+                            addCandidate(s12 + vk, [vi, vj, vk], 'series3');
+                            addCandidate(1 / (inv12 + 1 / vk), [vi, vj, vk], 'parallel3');
+                            addCandidate((s12 * vk) / (s12 + vk), [vi, vj, vk], 'series2_parallel1');
+                            addCandidate(p12 + vk, [vi, vj, vk], 'parallel2_series1');
+                        }
+                    }
+                }
+            }
+        };
+
+        const levelsRun = [];
+
+        // PASO 1: Evaluar exclusivamente la serie E12 completa (puntuaciones 1 y 2)
+        const poolE12 = allValues.filter(x => (tierOf.get(x) <= 2) && x >= minV && x <= maxV);
+        evaluatePool(poolE12);
+        levelsRun.push('E12');
+
+        // PASO 2: Utilizar E24 (puntuación 3) ÚNICAMENTE si no se encuentra combinación adecuada con E12
+        if (!candidates.some(c => c.adequate)) {
+            const poolE24 = allValues.filter(x => (tierOf.get(x) <= 3) && x >= minV && x <= maxV);
+            evaluatePool(poolE24);
+            levelsRun.push('E24');
+        }
+
+        // PASO 3: Valores no comerciales si la casilla está activa y aún no hay solución adecuada
+        if (nonCommercial && !candidates.some(c => c.adequate)) {
+            const poolAll = allValues.filter(x => x >= minV && x <= maxV);
+            evaluatePool(poolAll);
+            levelsRun.push('No estándar');
+        }
+
+        if (candidates.length === 0) { resolve({ top10: [], poolSize: 0, meta: null }); return; }
+
+        // ORDENAMIENTO ESTRICTO:
+        // 1. Cumplir tolerancia (adequate)
+        // 2. Disponibilidad comercial (tier: 1 = E12 preferente, 2 = E12 estándar, 3 = E24)
+        // 3. Cantidad de componentes (count: 1, 2, 3)
+        // 4. Precisión (menor error)
+        candidates.sort((a, b) => {
+            if (a.adequate !== b.adequate) return a.adequate ? -1 : 1;
+            if (a.adequate) {
+                if (a.tier !== b.tier) return a.tier - b.tier;
+                if (a.count !== b.count) return a.count - b.count;
+                if (Math.abs(a.error - b.error) > 1e-9) return a.error - b.error;
+                return a.availabilitySum - b.availabilitySum;
+            }
+            if (Math.abs(a.error - b.error) > 1e-9) return a.error - b.error;
+            if (a.tier !== b.tier) return a.tier - b.tier;
+            return a.count - b.count;
+        });
+
+        const TOP_N = 5;
+        const valid = candidates.filter(c => c.adequate);
+        const top = (valid.length ? valid : candidates).slice(0, TOP_N);
+
+        const top10 = top.map(e => ({ ...e, formula: buildFormula(e.resistors, e.type, e.rEq) }));
+        const meta = {
+            threshold,
+            hasAdequate: valid.length > 0,
+            levelsUsed: levelsRun.join(' / ')
+        };
+        resolve({ top10, poolSize, meta });
+    });
+}
+
+/* ================= FÓRMULA ================= */
+function buildFormula(resistors, type, rEq) {
+    const [r1, r2, r3] = resistors;
+    const o1 = formatOhms(r1), o2 = formatOhms(r2);
+    const o3 = r3 !== undefined ? formatOhms(r3) : '';
+    let sym = '', num = '';
+    switch (type) {
+        case 'single':
+            sym = 'R = R1';
+            num = `R = ${o1}`;
+            break;
+        case 'series2':
+            sym = 'R = R1 + R2';
+            num = `R = ${o1} + ${o2}`;
+            break;
+        case 'parallel2':
+            sym = 'R = (R1 · R2) / (R1 + R2)';
+            num = `R = (${o1} · ${o2}) / (${o1} + ${o2})`;
+            break;
+        case 'series3':
+            sym = 'R = R1 + R2 + R3';
+            num = `R = ${o1} + ${o2} + ${o3}`;
+            break;
+        case 'parallel3':
+            sym = 'R = 1 / (1/R1 + 1/R2 + 1/R3)';
+            num = `R = 1 / (1/${o1} + 1/${o2} + 1/${o3})`;
+            break;
+        case 'series2_parallel1':
+            sym = 'R = (R1 + R2) ∥ R3';
+            num = `R = (${o1} + ${o2}) ∥ ${o3}`;
+            break;
+        case 'parallel2_series1':
+            sym = 'R = (R1 ∥ R2) + R3';
+            num = `R = (${o1} ∥ ${o2}) + ${o3}`;
+            break;
+    }
+    return { symbolic: sym, numeric: num, result: formatOhms(rEq) };
+}
+
+function shortFormula(combo) {
+    return combo.formula.numeric.replace(/^R\s*=\s*/, '');
+}
+
+/* ================= DIAGRAMA ESQUEMÁTICO ================= */
+function drawDiagram(combo, tolerance) {
+    let w = 640, h = 240, cy = 120;
+    const type = combo.type;
+    if (type === 'parallel3') h = 270;
+
+    const wire = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--text)" stroke-width="2"/>`;
+    const R = (x, y, name, value) => {
+        const rw = 62, rh = 26;
+        const bands = getResistorColors(value, tolerance);
+        const nB = bands.length;
+        let s = `<rect x="${x-rw/2}" y="${y-rh/2}" width="${rw}" height="${rh}" fill="#e8d4b0" stroke="#555" stroke-width="1.5" rx="3"/>`;
+        const slotW = (rw * 0.68) / nB;
+        const bandW = slotW * 0.55;
+        const startX = x - rw * 0.34;
+        for (let b = 0; b < nB; b++) {
+            const bx = startX + b * slotW + (slotW - bandW) / 2;
+            s += `<rect x="${bx}" y="${y-rh/2+2}" width="${bandW}" height="${rh-4}" fill="${bands[b].hex}" stroke="rgba(0,0,0,0.2)" stroke-width="0.5"/>`;
+        }
+        s += `<text x="${x}" y="${y-rh/2-8}" text-anchor="middle" font-size="11" fill="var(--text2)" font-weight="700">${name}</text>`;
+        s += `<text x="${x}" y="${y+rh/2+16}" text-anchor="middle" font-size="11" fill="var(--accent)" font-weight="700">${formatOhms(value)}</text>`;
+        return s;
+    };
+
+    const [r1, r2, r3] = combo.resistors;
+    let svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+    switch (type) {
+        case 'single':
+            svg += wire(120, cy, w/2 - 31, cy) + R(w/2, cy, 'R1', r1) + wire(w/2 + 31, cy, w - 120, cy);
+            break;
+        case 'series2':
+            svg += wire(100, cy, 219, cy) + R(250, cy, 'R1', r1);
+            svg += wire(281, cy, 359, cy) + R(390, cy, 'R2', r2);
+            svg += wire(421, cy, 540, cy);
+            break;
+        case 'parallel2':
+            svg += wire(100, cy, 160, cy);
+            svg += wire(160, cy, 160, 65) + wire(160, cy, 160, 175);
+            svg += wire(160, 65, 219, 65) + R(250, 65, 'R1', r1) + wire(281, 65, 340, 65);
+            svg += wire(160, 175, 219, 175) + R(250, 175, 'R2', r2) + wire(281, 175, 340, 175);
+            svg += wire(340, 65, 340, 175) + wire(340, cy, 540, cy);
+            break;
+        case 'series3':
+            svg += wire(70, cy, 99, cy) + R(130, cy, 'R1', r1) + wire(161, cy, 239, cy);
+            svg += R(270, cy, 'R2', r2) + wire(301, cy, 379, cy);
+            svg += R(410, cy, 'R3', r3) + wire(441, cy, 570, cy);
+            break;
+        case 'parallel3':
+            svg += wire(90, cy, 160, cy) + wire(160, 40, 160, 200);
+            svg += wire(160, 40, 219, 40) + R(250, 40, 'R1', r1) + wire(281, 40, 380, 40);
+            svg += wire(160, cy, 219, cy) + R(250, cy, 'R2', r2) + wire(281, cy, 380, cy);
+            svg += wire(160, 200, 219, 200) + R(250, 200, 'R3', r3) + wire(281, 200, 380, 200);
+            svg += wire(380, 40, 380, 200) + wire(380, cy, 550, cy);
+            break;
+        case 'series2_parallel1':
+            svg += wire(100, cy, 160, cy) + wire(160, cy, 160, 65) + wire(160, cy, 160, 175);
+            svg += wire(160, 65, 219, 65) + R(250, 65, 'R1', r1) + wire(281, 65, 289, 65);
+            svg += R(320, 65, 'R2', r2) + wire(351, 65, 460, 65);
+            svg += wire(160, 175, 269, 175) + R(300, 175, 'R3', r3) + wire(331, 175, 460, 175);
+            svg += wire(460, 65, 460, 175) + wire(460, cy, 540, cy);
+            break;
+        case 'parallel2_series1':
+            svg += wire(80, cy, 140, cy) + wire(140, cy, 140, 60) + wire(140, cy, 140, 180);
+            svg += wire(140, 60, 199, 60) + R(230, 60, 'R1', r1) + wire(261, 60, 320, 60);
+            svg += wire(140, 180, 199, 180) + R(230, 180, 'R2', r2) + wire(261, 180, 320, 180);
+            svg += wire(320, 60, 320, 180) + wire(320, cy, 379, cy);
+            svg += R(410, cy, 'R3', r3) + wire(441, cy, 560, cy);
+            break;
+        default:
+            svg += `<text x="${w/2}" y="${cy}" text-anchor="middle" font-size="16" fill="var(--text)">${combo.formula?.numeric || ''}</text>`;
+    }
+    return svg + '</svg>';
+}
+
+/* ================= LEYENDA ================= */
+function renderColorLegend(resistors, tolerance) {
+    return resistors.map((r, i) => {
+        const bands = getResistorColors(r, tolerance);
+        const swatches = bands.map(b => `<span class="band-swatch" style="background:${b.hex}" title="${b.name}"></span>`).join('');
+        const names = bands.map(b => b.name).join(' · ');
+        const digits = bands.slice(0, -2).map(b => b.val).join('');
+        const mult = bands[bands.length - 2].mult;
+        const tolVal = bands[bands.length - 1].tolerance;
+        return `
+            <div class="legend-row">
+                <div class="legend-header">
+                    <span class="legend-name">R${i+1}</span>
+                    <span class="legend-val">${formatOhms(r)} · ${classifyValue(r)}</span>
+                </div>
+                <div class="legend-bands">${swatches}</div>
+                <div class="legend-caption">${names} → ${digits}×10<sup>${mult}</sup> Ω ±${tolVal}%</div>
+            </div>`;
+    }).join('');
+}
+
+/* ================= ESTADO Y RENDER ================= */
+const $ = id => document.getElementById(id);
+let state = {
+    top10: [],
+    tolerance: 5,
+    target: 0,
+    commercialMatch: null,
+    selectedIndex: 0,
+    meta: null,
+    maxRes: 3
+};
+
+function renderAll() {
+    const combo = state.top10[state.selectedIndex];
+    if (!combo) return;
+
+    const notice = $('commercialNotice');
+    const cm = state.commercialMatch, meta = state.meta, tol = state.tolerance;
+    const best = state.top10[0];
+    let icon = '✅', msg = '', warn = false;
+    if (meta && !meta.hasAdequate) {
+        warn = true; icon = '⚠️';
+        msg = `Ninguna combinación de valores comunes (${meta.levelsUsed}) con máx. ${state.maxRes} resistencia(s) queda dentro de ±${meta.threshold}% para <strong>${formatOhms(state.target)}</strong>. Se muestran las más cercanas, fuera de tolerancia (⚠).`;
+    } else if (cm && cm.exact && best.type === 'single') {
+        msg = `<strong>${formatOhms(state.target)}</strong> es un valor estándar de la serie ${TIER_NAMES[cm.tier]} (±${tol}%). Puedes usar un solo componente.`;
+    } else if (cm && cm.exact) {
+        msg = `💡 <strong>${formatOhms(state.target)}</strong> existe como valor ${TIER_NAMES[cm.tier]}, pero se prioriza una combinación de alta disponibilidad comercial (${best.series}), con error ${best.error.toFixed(3)}%.`;
+        icon = '💡';
+    } else if (cm) {
+        msg = `El valor estándar individual más cercano es <strong>${formatOhms(cm.value)} ±${tol}%</strong> (${TIER_NAMES[cm.tier]}, error ${(cm.error*100).toFixed(2)}%). La combinación recomendada prioriza disponibilidad (${best.series}, error ${best.error.toFixed(3)}%).`;
+        icon = '💡';
+    }
+    if (msg) {
+        notice.innerHTML = `<div class="icon">${icon}</div><div class="text">${msg}</div>`;
+        notice.style.borderColor = warn ? 'var(--warning)' : '';
+        notice.classList.add('visible');
+    } else {
+        notice.classList.remove('visible');
+    }
+
+    const titleEl = $('bestTitle');
+    titleEl.textContent = state.selectedIndex === 0
+        ? `✅ Mejor combinación (${combo.count} resistencias)`
+        : `📌 Alternativa seleccionada (${combo.count} resistencias) · ${formatOhms(combo.rEq)}`;
+
+    $('formulaBlock').innerHTML = `
+        <div class="symbolic">${combo.formula.symbolic}</div>
+        <div class="numeric">${combo.formula.numeric}</div>
+        <div class="result">${combo.formula.result}</div>`;
+
+    $('bestTarget').textContent = formatOhms(state.target);
+    $('bestSeries').textContent = combo.series;
+    $('bestTol').textContent = '±' + state.tolerance + ' %';
+    $('bestConn').textContent = CONNECTION_NAMES[combo.type];
+    $('bestR').textContent = formatOhms(combo.rEq);
+    $('bestError').textContent = combo.error.toFixed(3) + ' %';
+    $('bestError').style.color = combo.error < 0.05 ? 'var(--success)' : combo.error < 1 ? 'var(--warning)' : 'var(--error)';
+    $('bestPower').textContent = formatPower(1 / combo.rEq);
+
+    $('diagramContainer').innerHTML = drawDiagram(combo, state.tolerance);
+    $('colorLegend').innerHTML = renderColorLegend(combo.resistors, state.tolerance);
+
+    const altItems = $('altItems');
+    altItems.innerHTML = '';
+    state.top10.forEach((c, idx) => {
+        const div = document.createElement('div');
+        div.className = 'alt-item' + (idx === state.selectedIndex ? ' active' : '');
+        div.dataset.index = idx;
+        div.innerHTML = `
+            <div class="rank-pill">
+                <span class="rank">${idx + 1}</span>
+                <span class="count-badge">${c.count}R</span>
+                <span class="count-badge">${c.series}</span>
+            </div>
+            <span class="eq">${shortFormula(c)}</span>
+            <span class="val">${formatOhms(c.rEq)} · ${c.error.toFixed(3)}%${c.adequate ? '' : ' ⚠'}</span>`;
+        div.addEventListener('click', () => {
+            state.selectedIndex = idx;
+            renderAll();
+            document.querySelector('.best-config').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        altItems.appendChild(div);
+    });
+}
+
+/* ================= EVENTO PRINCIPAL ================= */
+const searchBtn = $('searchBtn');
+const statusDiv = $('status');
+function showStatus(msg, type) { statusDiv.textContent = msg; statusDiv.className = type; }
+
+searchBtn.addEventListener('click', async () => {
+    const num = parseFloat($('targetInput').value);
+    if (isNaN(num) || num <= 0) { showStatus('Ingresa un valor mayor que 0.', 'error'); return; }
+    const target = num * parseFloat($('unitSelect').value);
+    const tol = parseInt($('toleranceSelect').value, 10);
+    const maxRes = parseInt($('maxResistors').value, 10) || 3;
+    const nonComm = $('includeNonCommercial').checked;
+
+    searchBtn.disabled = true;
+    showStatus('Buscando combinaciones óptimas...', 'loading');
+
+    try {
+        const t0 = performance.now();
+        const { top10, poolSize, meta } = await searchCombinations(target, tol, maxRes, nonComm);
+        const elapsed = ((performance.now() - t0)).toFixed(1);
+
+        if (!top10 || top10.length === 0) {
+            showStatus('No se encontraron combinaciones en el rango solicitado.', 'error');
+            return;
+        }
+
+        const commercialMatch = findCommercialMatch(target, tol);
+
+        state = { top10, tolerance: tol, target, commercialMatch, selectedIndex: 0, meta, maxRes };
+
+        $('resultSection').classList.add('visible');
+        renderAll();
+
+        showStatus(`Listo en ${elapsed} ms · ${top10.length} mejores alternativas encontradas (${poolSize} valores analizados, máx. ${maxRes} resistencias).`, 'success');
+    } catch (err) {
+        console.error(err);
+        showStatus('Error: ' + err.message, 'error');
+    } finally {
+        searchBtn.disabled = false;
+    }
+});
+
+$('targetInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchBtn.click(); });
+
+window.addEventListener('DOMContentLoaded', () => searchBtn.click());
+</script>
+</body>
+</html>
