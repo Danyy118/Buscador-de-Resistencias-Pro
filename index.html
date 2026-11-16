@@ -158,7 +158,8 @@ svg { max-width: 100%; height: auto; }
     <div class="row">
         <div class="form-group" style="flex:2">
             <label for="targetInput">Valor deseado</label>
-            <input type="number" id="targetInput" value="6.3" min="0.001" step="any">
+            <!-- ===== NUEVO: valor inicial vacío (antes era 6.3) ===== -->
+            <input type="number" id="targetInput" value="" min="0.001" step="any" placeholder="Ej: 6.3">
         </div>
         <div class="form-group" style="flex:1">
             <label for="unitSelect">Prefijo SI</label>
@@ -189,6 +190,11 @@ svg { max-width: 100%; height: auto; }
     <div class="checkbox-row">
         <input type="checkbox" id="includeNonCommercial">
         <label for="includeNonCommercial">Incluir valores no comerciales (grid fino 100/década)</label>
+    </div>
+    <!-- ===== NUEVO: checkbox Solo Steren ===== -->
+    <div class="checkbox-row">
+        <input type="checkbox" id="onlySteren">
+        <label for="onlySteren">Solo valores disponibles en Steren (serie E24, tolerancia real de tienda ±5%)</label>
     </div>
 
     <button class="primary" id="searchBtn">🔍 Buscar combinación óptima</button>
@@ -223,6 +229,77 @@ svg { max-width: 100%; height: auto; }
         </div>
         <p class="note">Potencia calculada asumiendo 1 V entre terminales. P ∝ V² para voltajes de trabajo diferentes.</p>
     </div>
+
+    <!-- ===== NUEVO: Conversor de código de colores ===== -->
+    <div class="section-title" style="margin-top:28px;">🎨 Conversor de código de colores</div>
+    <div class="best-config" style="border-color:var(--accent2);">
+        <h2 style="color:var(--accent2);">Valor → Bandas de color</h2>
+        <div class="row">
+            <div class="form-group" style="flex:2">
+                <label for="ccValue">Valor de la resistencia</label>
+                <input type="number" id="ccValue" value="" min="0.001" step="any" placeholder="Ej: 4700">
+            </div>
+            <div class="form-group" style="flex:1">
+                <label for="ccUnit">Prefijo SI</label>
+                <select id="ccUnit">
+                    <option value="0.001">mΩ</option>
+                    <option value="1" selected>Ω</option>
+                    <option value="1e3">kΩ</option>
+                    <option value="1e6">MΩ</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:1">
+                <label for="ccTol">Tolerancia</label>
+                <select id="ccTol">
+                    <option value="1">1% (Marrón)</option>
+                    <option value="2">2% (Rojo)</option>
+                    <option value="5" selected>5% (Dorado)</option>
+                    <option value="10">10% (Plateado)</option>
+                </select>
+            </div>
+        </div>
+        <button class="primary" id="ccToBandsBtn" style="background:var(--accent2);">🎨 Ver código de colores</button>
+
+        <div id="ccBandsResult" style="display:none; margin-top:16px;">
+            <div class="formula-block" id="ccBandsFormula"></div>
+            <div class="diagram-container" id="ccBandsDiagram"></div>
+            <div class="color-legend" id="ccBandsLegend"></div>
+        </div>
+    </div>
+
+    <div class="best-config" style="border-color:var(--warning); margin-top:20px;">
+        <h2 style="color:var(--warning);">Bandas de color → Valor</h2>
+        <p class="alt-hint" style="margin-top:-4px;">Selecciona el color de cada banda (la 4ª es el multiplicador y la 5ª la tolerancia).</p>
+        <div class="row">
+            <div class="form-group" style="flex:1; min-width:110px;">
+                <label for="band1">Banda 1</label>
+                <select id="band1"></select>
+            </div>
+            <div class="form-group" style="flex:1; min-width:110px;">
+                <label for="band2">Banda 2</label>
+                <select id="band2"></select>
+            </div>
+            <div class="form-group" style="flex:1; min-width:110px;">
+                <label for="band3">Banda 3</label>
+                <select id="band3"></select>
+            </div>
+            <div class="form-group" style="flex:1; min-width:130px;">
+                <label for="bandMult">Multiplicador</label>
+                <select id="bandMult"></select>
+            </div>
+            <div class="form-group" style="flex:1; min-width:120px;">
+                <label for="bandTol">Tolerancia</label>
+                <select id="bandTol"></select>
+            </div>
+        </div>
+        <button class="primary" id="bandsToValueBtn" style="background:var(--warning);">🔢 Calcular valor</button>
+
+        <div id="ccValueResult" style="display:none; margin-top:16px;">
+            <div class="formula-block" id="ccValueFormula"></div>
+            <div class="diagram-container" id="ccValueDiagram"></div>
+        </div>
+    </div>
+    <!-- ===== FIN NUEVO ===== -->
 </div>
 
 <script>
@@ -315,9 +392,25 @@ const CONNECTION_NAMES = {
 const COMMON_MAX = 1e7;
 const adequateThreshold = tol => tol;
 
+/* ===== NUEVO: CATÁLOGO STEREN ===== */
+// Steren comercializa principalmente serie E24 al 5% (película de carbón)
+// y E12 al 10%. Algunos valores E24 al 1% (película metálica).
+// Para el filtro "Solo Steren" usamos E24 como catálogo disponible
+// y la tolerancia real de tienda (5% para E24).
+const STEREN_CATALOG = new Set();
+const STEREN_TOLERANCE = 5; // tolerancia real de tienda Steren (E24 al 5%)
+
+function buildSterenCatalog() {
+    const values = generateValues(E24, 0, 7).filter(x => x <= COMMON_MAX);
+    for (const v of values) STEREN_CATALOG.add(parseFloat(v.toPrecision(7)));
+}
+buildSterenCatalog();
+/* ===== FIN NUEVO ===== */
+
 const TIER_CACHE = {};
-function getTierData(tol, nonCommercial) {
-    const key = `${tol}_${nonCommercial ? 'nc' : 'c'}`;
+// ===== NUEVO: tercer parámetro onlySteren =====
+function getTierData(tol, nonCommercial, onlySteren) {
+    const key = `${tol}_${nonCommercial ? 'nc' : 'c'}_${onlySteren ? 'st' : 'all'}`;
     if (TIER_CACHE[key]) return TIER_CACHE[key];
 
     const tierOf = new Map();
@@ -328,13 +421,19 @@ function getTierData(tol, nonCommercial) {
     };
     const common = base => generateValues(base, 0, 7).filter(x => x <= COMMON_MAX);
 
-    put(common(E12));
-    put(common(E24));
-    if (nonCommercial) put(generateFineGrid(100, -1, 7));
+    if (onlySteren) {
+        // Solo valores que Steren comercializa (E24)
+        put(Array.from(STEREN_CATALOG));
+    } else {
+        put(common(E12));
+        put(common(E24));
+        if (nonCommercial) put(generateFineGrid(100, -1, 7));
+    }
 
     const values = Array.from(tierOf.keys()).sort((a, b) => a - b);
     return (TIER_CACHE[key] = { tierOf, values });
 }
+// ===== FIN NUEVO =====
 
 function classifyValue(v) {
     const exp = Math.floor(Math.log10(v) + 1e-9);
@@ -349,8 +448,10 @@ function seriesLabel(resistors, tierOf) {
     return TIER_NAMES[worstTier];
 }
 
-function findCommercialMatch(value, tol) {
-    const { tierOf, values: pool } = getTierData(tol, false);
+// ===== NUEVO: tercer parámetro onlySteren =====
+function findCommercialMatch(value, tol, onlySteren) {
+    const useTol = onlySteren ? STEREN_TOLERANCE : tol;
+    const { tierOf, values: pool } = getTierData(useTol, false, onlySteren);
     let lo = 0, hi = pool.length - 1;
     while (lo <= hi) {
         const mid = (lo + hi) >> 1;
@@ -367,9 +468,10 @@ function findCommercialMatch(value, tol) {
     }
     if (best === null) return null;
     if (bestErr < 1e-4) return { value: best, error: 0, exact: true, tier: tierOf.get(best) };
-    if (bestErr <= tol / 100) return { value: best, error: bestErr, exact: false, tier: tierOf.get(best) };
+    if (bestErr <= useTol / 100) return { value: best, error: bestErr, exact: false, tier: tierOf.get(best) };
     return null;
 }
+// ===== FIN NUEVO =====
 
 /* ================= FORMATO ================= */
 const trimZero = s => s.replace(/\.?0+$/, '');
@@ -435,10 +537,12 @@ function getResistorColors(value, tolerance) {
 }
 
 /* ================= ALGORITMO DE BÚSQUEDA Y SELECCIÓN COMERCIAL ================= */
-function searchCombinations(target, tol, maxResistors, nonCommercial) {
+// ===== NUEVO: quinto parámetro onlySteren =====
+function searchCombinations(target, tol, maxResistors, nonCommercial, onlySteren) {
     return new Promise(resolve => {
-        const { tierOf, values: allValues } = getTierData(tol, nonCommercial);
-        const threshold = adequateThreshold(tol);
+        const { tierOf, values: allValues } = getTierData(tol, nonCommercial, onlySteren);
+        const effectiveTol = onlySteren ? STEREN_TOLERANCE : tol;
+        const threshold = adequateThreshold(effectiveTol);
         const minV = Math.max(0.1, target / 200);
         const maxV = Math.min(1e8, target * 200);
         const MAX_KEEP_ERROR = 50;
@@ -459,9 +563,7 @@ function searchCombinations(target, tol, maxResistors, nonCommercial) {
 
             const count = sortedR.length;
             const balance = sortedR[sortedR.length - 1] / sortedR[0];
-            // Puntuación de disponibilidad de la combinación = el componente menos disponible (peor caso)
             const availabilityRank = Math.max(...sortedR.map(r => tierOf.get(r) || 4));
-            // Suma de puntuaciones para desempatar dentro del mismo rango de disponibilidad
             const availabilitySum = sortedR.reduce((acc, r) => acc + (tierOf.get(r) || 4), 0);
 
             candidates.push({
@@ -524,32 +626,35 @@ function searchCombinations(target, tol, maxResistors, nonCommercial) {
 
         const levelsRun = [];
 
-        // PASO 1: Evaluar exclusivamente la serie E12 completa (puntuaciones 1 y 2)
-        const poolE12 = allValues.filter(x => (tierOf.get(x) <= 2) && x >= minV && x <= maxV);
-        evaluatePool(poolE12);
-        levelsRun.push('E12');
+        // ===== NUEVO: rama Steren =====
+        if (onlySteren) {
+            const poolSteren = allValues.filter(x => x >= minV && x <= maxV);
+            evaluatePool(poolSteren);
+            levelsRun.push('Steren (E24 ±5%)');
+        } else {
+            // PASO 1: Evaluar exclusivamente la serie E12 completa (puntuaciones 1 y 2)
+            const poolE12 = allValues.filter(x => (tierOf.get(x) <= 2) && x >= minV && x <= maxV);
+            evaluatePool(poolE12);
+            levelsRun.push('E12');
 
-        // PASO 2: Utilizar E24 (puntuación 3) ÚNICAMENTE si no se encuentra combinación adecuada con E12
-        if (!candidates.some(c => c.adequate)) {
-            const poolE24 = allValues.filter(x => (tierOf.get(x) <= 3) && x >= minV && x <= maxV);
-            evaluatePool(poolE24);
-            levelsRun.push('E24');
-        }
+            // PASO 2: Utilizar E24 (puntuación 3) ÚNICAMENTE si no se encuentra combinación adecuada con E12
+            if (!candidates.some(c => c.adequate)) {
+                const poolE24 = allValues.filter(x => (tierOf.get(x) <= 3) && x >= minV && x <= maxV);
+                evaluatePool(poolE24);
+                levelsRun.push('E24');
+            }
 
-        // PASO 3: Valores no comerciales si la casilla está activa y aún no hay solución adecuada
-        if (nonCommercial && !candidates.some(c => c.adequate)) {
-            const poolAll = allValues.filter(x => x >= minV && x <= maxV);
-            evaluatePool(poolAll);
-            levelsRun.push('No estándar');
+            // PASO 3: Valores no comerciales si la casilla está activa y aún no hay solución adecuada
+            if (nonCommercial && !candidates.some(c => c.adequate)) {
+                const poolAll = allValues.filter(x => x >= minV && x <= maxV);
+                evaluatePool(poolAll);
+                levelsRun.push('No estándar');
+            }
         }
+        // ===== FIN NUEVO =====
 
         if (candidates.length === 0) { resolve({ top10: [], poolSize: 0, meta: null }); return; }
 
-        // ORDENAMIENTO ESTRICTO:
-        // 1. Cumplir tolerancia (adequate)
-        // 2. Disponibilidad comercial (tier: 1 = E12 preferente, 2 = E12 estándar, 3 = E24)
-        // 3. Cantidad de componentes (count: 1, 2, 3)
-        // 4. Precisión (menor error)
         candidates.sort((a, b) => {
             if (a.adequate !== b.adequate) return a.adequate ? -1 : 1;
             if (a.adequate) {
@@ -569,9 +674,11 @@ function searchCombinations(target, tol, maxResistors, nonCommercial) {
 
         const top10 = top.map(e => ({ ...e, formula: buildFormula(e.resistors, e.type, e.rEq) }));
         const meta = {
-            threshold,
+            threshold: effectiveTol,
             hasAdequate: valid.length > 0,
-            levelsUsed: levelsRun.join(' / ')
+            levelsUsed: levelsRun.join(' / '),
+            effectiveTol,
+            onlySteren: !!onlySteren
         };
         resolve({ top10, poolSize, meta });
     });
@@ -805,6 +912,22 @@ const searchBtn = $('searchBtn');
 const statusDiv = $('status');
 function showStatus(msg, type) { statusDiv.textContent = msg; statusDiv.className = type; }
 
+// ===== NUEVO: listener del checkbox Steren (exclusión mutua) =====
+$('onlySteren').addEventListener('change', function() {
+    if (this.checked) {
+        $('includeNonCommercial').checked = false;
+        $('includeNonCommercial').disabled = true;
+    } else {
+        $('includeNonCommercial').disabled = false;
+    }
+});
+$('includeNonCommercial').addEventListener('change', function() {
+    if (this.checked) {
+        $('onlySteren').checked = false;
+    }
+});
+// ===== FIN NUEVO =====
+
 searchBtn.addEventListener('click', async () => {
     const num = parseFloat($('targetInput').value);
     if (isNaN(num) || num <= 0) { showStatus('Ingresa un valor mayor que 0.', 'error'); return; }
@@ -812,13 +935,14 @@ searchBtn.addEventListener('click', async () => {
     const tol = parseInt($('toleranceSelect').value, 10);
     const maxRes = parseInt($('maxResistors').value, 10) || 3;
     const nonComm = $('includeNonCommercial').checked;
+    const onlySteren = $('onlySteren').checked; // ===== NUEVO =====
 
     searchBtn.disabled = true;
     showStatus('Buscando combinaciones óptimas...', 'loading');
 
     try {
         const t0 = performance.now();
-        const { top10, poolSize, meta } = await searchCombinations(target, tol, maxRes, nonComm);
+        const { top10, poolSize, meta } = await searchCombinations(target, tol, maxRes, nonComm, onlySteren);
         const elapsed = ((performance.now() - t0)).toFixed(1);
 
         if (!top10 || top10.length === 0) {
@@ -826,14 +950,15 @@ searchBtn.addEventListener('click', async () => {
             return;
         }
 
-        const commercialMatch = findCommercialMatch(target, tol);
+        const commercialMatch = findCommercialMatch(target, tol, onlySteren);
 
-        state = { top10, tolerance: tol, target, commercialMatch, selectedIndex: 0, meta, maxRes };
+        // ===== NUEVO: tolerancia efectiva desde meta =====
+        state = { top10, tolerance: meta.effectiveTol, target, commercialMatch, selectedIndex: 0, meta, maxRes };
 
         $('resultSection').classList.add('visible');
         renderAll();
 
-        showStatus(`Listo en ${elapsed} ms · ${top10.length} mejores alternativas encontradas (${poolSize} valores analizados, máx. ${maxRes} resistencias).`, 'success');
+        showStatus(`Listo en ${elapsed} ms · ${top10.length} mejores alternativas encontradas (${poolSize} valores analizados, máx. ${maxRes} resistencias${onlySteren ? ', catálogo Steren ±5%' : ''}).`, 'success');
     } catch (err) {
         console.error(err);
         showStatus('Error: ' + err.message, 'error');
@@ -844,7 +969,148 @@ searchBtn.addEventListener('click', async () => {
 
 $('targetInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchBtn.click(); });
 
-window.addEventListener('DOMContentLoaded', () => searchBtn.click());
+// ===== NUEVO: se eliminó el auto-click al cargar porque el input ahora está vacío =====
+// window.addEventListener('DOMContentLoaded', () => searchBtn.click());
+// ===== FIN NUEVO =====
+
+/* ===== NUEVO: CONVERSOR DE CÓDIGO DE COLORES ===== */
+const DIGIT_COLORS = COLOR_NAMES.map((n, i) => ({ name: n, hex: COLOR_HEX[i], val: i }));
+const MULT_COLORS = [
+    ...DIGIT_COLORS,
+    { name: 'Dorado',   hex: '#c9a227', val: -1 },
+    { name: 'Plateado', hex: '#b0b0b0', val: -2 }
+];
+const TOL_COLORS = [
+    { name: 'Marrón',    hex: '#8B4513', val: 1  },
+    { name: 'Rojo',      hex: '#e53935', val: 2  },
+    { name: 'Dorado',    hex: '#c9a227', val: 5  },
+    { name: 'Plateado',  hex: '#b0b0b0', val: 10 }
+];
+
+function fillSelect(sel, items, selectedVal) {
+    sel.innerHTML = items.map(it =>
+        `<option value="${it.val}" ${it.val === selectedVal ? 'selected' : ''}>${it.name}</option>`
+    ).join('');
+    for (const opt of sel.options) {
+        const item = items.find(i => String(i.val) === opt.value);
+        if (item) { opt.style.color = item.hex; opt.style.fontWeight = '700'; }
+    }
+}
+const $b1 = $('band1'), $b2 = $('band2'), $b3 = $('band3'), $bm = $('bandMult'), $bt = $('bandTol');
+fillSelect($b1, DIGIT_COLORS, 4);
+fillSelect($b2, DIGIT_COLORS, 7);
+fillSelect($b3, DIGIT_COLORS, 0);
+fillSelect($bm, MULT_COLORS, 2);
+fillSelect($bt, TOL_COLORS, 5);
+
+function drawResistorSvg(bands, labelValue, name) {
+    const w = 640, h = 200, cy = 100;
+    const rw = 260, rh = 70;
+    const cx = w / 2;
+
+    let svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `<line x1="${cx-rw/2-90}" y1="${cy}" x2="${cx-rw/2}" y2="${cy}" stroke="var(--text)" stroke-width="2"/>`;
+    svg += `<line x1="${cx+rw/2}" y1="${cy}" x2="${cx+rw/2+90}" y2="${cy}" stroke="var(--text)" stroke-width="2"/>`;
+    svg += `<rect x="${cx-rw/2}" y="${cy-rh/2}" width="${rw}" height="${rh}" fill="#e8d4b0" stroke="#555" stroke-width="1.5" rx="6"/>`;
+
+    const nB = bands.length;
+    const bodyL = cx - rw/2;
+    const usable = rw * 0.72;
+    const gap = usable / (nB + 0.5);
+    for (let i = 0; i < nB; i++) {
+        const isTol = (i === nB - 1);
+        const x = bodyL + rw * 0.10 + i * gap + (isTol ? gap * 0.35 : 0);
+        const bw = gap * 0.55;
+        svg += `<rect x="${x}" y="${cy-rh/2+4}" width="${bw}" height="${rh-8}" fill="${bands[i].hex}" stroke="rgba(0,0,0,0.25)" stroke-width="0.8"/>`;
+    }
+    svg += `<text x="${cx}" y="${cy-rh/2-14}" text-anchor="middle" font-size="13" fill="var(--text2)" font-weight="700">${name}</text>`;
+    svg += `<text x="${cx}" y="${cy+rh/2+24}" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">${labelValue}</text>`;
+    return svg + '</svg>';
+}
+
+function renderBandsFromValue() {
+    const num = parseFloat($('ccValue').value);
+    const unit = parseFloat($('ccUnit').value);
+    const tol = parseFloat($('ccTol').value);
+    const res = $('ccBandsResult');
+
+    if (isNaN(num) || num <= 0) {
+        res.style.display = 'none';
+        return;
+    }
+    const value = num * unit;
+    const bands = getResistorColors(value, tol);
+
+    const digitBands = bands.slice(0, -2);
+    const multBand = bands[bands.length - 2];
+    const tolBand = bands[bands.length - 1];
+    const digits = digitBands.map(b => b.val).join('');
+    const multExp = multBand.mult;
+    const restored = parseFloat(digits) * Math.pow(10, multExp);
+
+    $('ccBandsFormula').innerHTML = `
+        <div class="symbolic">Bandas: ${bands.map(b => b.name).join(' · ')}</div>
+        <div class="numeric">${digits} × 10<sup>${multExp}</sup> Ω ± ${tolBand.tolerance}%</div>
+        <div class="result">${formatOhms(restored)} ± ${tolBand.tolerance}%</div>`;
+
+    $('ccBandsDiagram').innerHTML = drawResistorSvg(bands, formatOhms(value), 'R');
+
+    $('ccBandsLegend').innerHTML = `
+        <div class="legend-row" style="min-width:100%;">
+            <div class="legend-header">
+                <span class="legend-name">Bandas leídas</span>
+                <span class="legend-val">${formatOhms(restored)}</span>
+            </div>
+            <div class="legend-bands">${bands.map(b => `<span class="band-swatch" style="background:${b.hex}" title="${b.name}"></span>`).join('')}</div>
+            <div class="legend-caption">${bands.map(b => b.name).join(' · ')} → ${digits}×10<sup>${multExp}</sup> Ω ±${tolBand.tolerance}%</div>
+        </div>`;
+    res.style.display = 'block';
+}
+
+function renderValueFromBands() {
+    const d1 = parseInt($b1.value, 10);
+    const d2 = parseInt($b2.value, 10);
+    const d3 = parseInt($b3.value, 10);
+    const mult = parseInt($bm.value, 10);
+    const tol = parseFloat($bt.value);
+
+    const mantissa = d1 * 100 + d2 * 10 + d3;
+    const value = mantissa * Math.pow(10, mult);
+    const res = $('ccValueResult');
+
+    if (!isFinite(value) || value <= 0) {
+        res.style.display = 'none';
+        return;
+    }
+
+    const multItem = MULT_COLORS.find(m => m.val === mult);
+    const tolItem = TOL_COLORS.find(t => t.val === tol);
+    const bands = [
+        { name: COLOR_NAMES[d1], hex: COLOR_HEX[d1], val: d1 },
+        { name: COLOR_NAMES[d2], hex: COLOR_HEX[d2], val: d2 },
+        { name: COLOR_NAMES[d3], hex: COLOR_HEX[d3], val: d3 },
+        { name: multItem.name, hex: multItem.hex, mult },
+        { name: tolItem.name, hex: tolItem.hex, tolerance: tol }
+    ];
+
+    $('ccValueFormula').innerHTML = `
+        <div class="symbolic">Valor = (B1·100 + B2·10 + B3) × 10<sup>Multiplicador</sup></div>
+        <div class="numeric">(${d1}·100 + ${d2}·10 + ${d3}) × 10<sup>${mult}</sup> Ω ± ${tol}%</div>
+        <div class="result">${formatOhms(value)} ± ${tol}%</div>`;
+
+    $('ccValueDiagram').innerHTML = drawResistorSvg(bands, formatOhms(value), 'R');
+    res.style.display = 'block';
+}
+
+$('ccToBandsBtn').addEventListener('click', renderBandsFromValue);
+$('bandsToValueBtn').addEventListener('click', renderValueFromBands);
+['ccValue','ccUnit','ccTol'].forEach(id => $(id).addEventListener('input', () => {
+    if ($('ccBandsResult').style.display === 'block') renderBandsFromValue();
+}));
+['band1','band2','band3','bandMult','bandTol'].forEach(id => $(id).addEventListener('change', () => {
+    if ($('ccValueResult').style.display === 'block') renderValueFromBands();
+}));
+/* ===== FIN NUEVO ===== */
 </script>
 </body>
 </html>
